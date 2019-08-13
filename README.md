@@ -1,5 +1,7 @@
 # PyTrees Viz
 
+* [Roadmap](#-roadmap)
+
 A javascript library for visualisation and monitoring of behaviour trees.
 
 It is not an editor and is also not restricted to a py_tree flavoured behaviour tree either.
