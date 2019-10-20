@@ -19,6 +19,9 @@ joint.shapes.trees.Node = joint.dia.Element.define(
         size: { width: 170, height: 50 },
         collapse_children: false,
         hidden: false,
+        show_detail: false,
+        original_width: 170,
+        original_height: 50,
         attrs: {
             box: {
                 refX: '0%', refY: '0%',
@@ -365,6 +368,35 @@ var py_trees = (function() {
   //     splash (bool) - showing the splash cheat sheet or a rendered tree
 
   /**
+   * Callback for collapsing children on a click event
+   */
+  var _canvas_collapse_children_handler = function(graph, view, event, x, y) {
+      _canvas_collapse_children(graph, view.model)
+  }
+
+  /**
+   * Collapse children of the selected model. This merely
+   * hides them from view, but doesn't remove them from the graph.
+   */
+  var _canvas_collapse_children = function(graph, model) {
+      var successors = graph.getSuccessors(model)
+      if ( !successors.length ) {
+          return
+      }
+      model.set('collapse_children', !model.get('collapse_children'))
+      collapse_children = model.get('collapse_children')
+      _.each(successors, function(behaviour) {
+          behaviour.set('hidden', collapse_children)
+          var links = graph.getConnectedLinks(behaviour, { inbound: true })
+          _.each(links, function(link) {
+              // prefer to set a variable in the model and do this in a view,
+              // but this will do till we have a custom link and link view
+              link.attr('line/visibility', collapse_children ? 'hidden' : 'visible')
+          })
+      })
+  }
+
+  /**
    * Create elided details from a details (text) snippet.
    */
   var _canvas_create_elided_details = function(details) {
@@ -548,7 +580,14 @@ var py_trees = (function() {
           _canvas_scale_content_to_fit(paper)
       })
       paper.on('element:pointerdblclick',
-        _canvas_collapse_children_handler.bind(null, graph)
+          _canvas_collapse_children_handler.bind(null, graph)
+      )
+      /* Unfortunately this also fires every time the double click event fires
+       * TODO: a) only implement pointerclick and implement both there
+       *   or  b) only execute pointerclick if no other click is received inside a timeout
+       */
+      paper.on('element:pointerclick',
+          _canvas_expand_node_handler.bind(null, graph)
       )
 
       graph.set("splash", true)
@@ -614,34 +653,7 @@ var py_trees = (function() {
       console.log('    width:', graph_bounding_box.width, 'height:', graph_bounding_box.height);
       console.log("_canvas_layout_graph_done")
   }
-  /**
-   * Callback for collapsing children on a click event
-   */
-  var _canvas_collapse_children_handler = function(graph, view, event, x, y) {
-      _canvas_collapse_children(graph, view.model)
-  }
 
-  /**
-   * Collapse children of the selected model. This merely
-   * hides them from view, but doesn't remove them from the graph.
-   */
-  var _canvas_collapse_children = function(graph, model) {
-      var successors = graph.getSuccessors(model)
-      if ( !successors.length ) {
-          return
-      }
-      model.set('collapse_children', !model.get('collapse_children'))
-      collapse_children = model.get('collapse_children')
-      _.each(successors, function(behaviour) {
-          behaviour.set('hidden', collapse_children)
-          var links = graph.getConnectedLinks(behaviour, { inbound: true })
-          _.each(links, function(link) {
-              // prefer to set a variable in the model and do this in a view,
-              // but this will do till we have a custom link and link view
-              link.attr('line/visibility', collapse_children ? 'hidden' : 'visible')
-          })
-      })
-  }
 
   /**
    * Handle window resizing events. Needs to be hooked up
@@ -719,6 +731,32 @@ var py_trees = (function() {
   }
 
   /**
+   * Callback for toggling the data view
+   */
+  var _canvas_expand_node_handler = function(graph, view, _event, _x, _y) {
+      _canvas_expand_node(graph, view.model)
+  }
+
+  /**
+   * Toggle the data view.
+   */
+  var _canvas_expand_node = function(_graph, model) {
+      console.log("_canvas_expand_node")
+      model.set('expanded', !model.get('expanded'))
+      var expanded = model.get('expanded')
+      if ( expanded ) {
+          var height = 200
+      } else {
+          var height = model.get('original_height')
+      }
+      model.set({
+          size: { width: model.get('original_width'), height: height }
+      }) // , { skipParentHandler: true });
+      _canvas_layout_graph({graph: _graph})
+      console.log("_canvas_toggle_show_data_done")
+  }
+
+  /**
    * Right now this is creating the graph. Will have to decide
    * in future whether new tree serialisations reset the graph
    * and completely recreate or just update the graph. The latter
@@ -740,6 +778,13 @@ var py_trees = (function() {
         behaviour_id = el.get('behaviour_id')
         if (el.get('collapse_children')) {
           collapsed_nodes.push(behaviour_id)
+        }
+    })
+    var expanded_nodes = []
+    _.each(graph.getElements(), function(el) {
+        behaviour_id = el.get('behaviour_id')
+        if (el.get('expanded')) {
+            expanded_nodes.push(behaviour_id)
         }
     })
 
@@ -800,6 +845,12 @@ var py_trees = (function() {
         behaviour_id = el.get("behaviour_id")
         if (collapsed_nodes.includes(behaviour_id)) {
           _canvas_collapse_children(graph, el)
+        }
+    })
+    _.each(graph.getElements(), function(el) {
+        behaviour_id = el.get("behaviour_id")
+        if (expanded_nodes.includes(behaviour_id)) {
+          _canvas_expand_node(graph, el)
         }
     })
     console.log("_canvas_update_graph_done")
